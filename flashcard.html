@@ -4,48 +4,41 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <link rel="stylesheet" href="ui.css">
-  <title>Flashcards - TOEIC 700 Master</title>
+  <title>Flashcards - TOEIC 700 SRS</title>
   <style>
-    #version-tag { font-size: 10px; color: var(--subtext); position: absolute; top: 10px; right: 10px; opacity: 0.7; }
-    #card { min-height: 250px; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; transition: transform 0.1s; }
-    #card:active { transform: scale(0.98); }
-    #answer-section { margin-top: 20px; padding-top: 20px; border-top: 1px dashed #444; width: 100%; }
-    #meaning { font-size: 1.5rem; color: var(--accent); font-weight: bold; margin-bottom: 10px; }
-    #example { font-style: italic; color: var(--subtext); font-size: 0.9rem; }
-    .btn-group { display: grid; grid-template-columns: 1fr; gap: 10px; width: 100%; }
-    .sub-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    button:disabled { opacity: 0.3; cursor: not-allowed; filter: grayscale(1); }
+    #version-tag{font-size:10px;opacity:.7;position:fixed;top:10px;right:10px}
+    #card{min-height:240px;display:flex;flex-direction:column;justify-content:center;align-items:center;cursor:pointer}
+    #answer{width:100%;margin-top:18px;padding-top:18px;border-top:1px dashed #444}
+    #meaning{font-size:1.4rem;font-weight:700;margin-bottom:8px}
+    #example{font-size:.95rem;opacity:.85;font-style:italic}
+    button:disabled{opacity:.35;cursor:not-allowed}
+    .btn-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   </style>
 </head>
 <body>
-  <div id="version-tag">FLASHCARD v2</div>
+  <div id="version-tag">FLASHCARD v3</div>
 
   <div class="container">
-    <button class="btn-outline" style="margin-bottom: 20px; width: auto;" onclick="location.href='index.html'">← 戻る</button>
+    <button class="btn-main" onclick="location.href='index.html'" style="width:auto;margin-bottom:12px">← 戻る</button>
 
     <div class="card" id="card">
       <div id="word" class="text-large">読み込み中...</div>
 
-      <div id="answer-section" class="hidden">
+      <div id="tap-hint" style="margin-top:14px;font-size:12px;opacity:.7;">
+        タップで答えを表示
+      </div>
+
+      <div id="answer" class="hidden">
         <div id="meaning"></div>
         <div id="example"></div>
       </div>
-
-      <div id="tap-hint" style="margin-top: 20px; font-size: 12px; color: #666;">
-        タップで答えを表示
-      </div>
     </div>
 
-    <div class="mt-20 btn-group">
-      <button id="btn-known" class="btn-primary" disabled onclick="handleAnswer(true)">覚えた</button>
-
-      <div class="sub-group">
-        <button id="btn-unsure" class="btn-outline" disabled onclick="handleAnswer(false)">怪しい</button>
-        <button id="btn-forgot"
-                class="btn-outline"
-                style="color: var(--danger); border-color: var(--danger);"
-                disabled
-                onclick="handleAnswer(false)">忘れた</button>
+    <div style="margin-top:14px;display:grid;gap:10px;">
+      <button id="btn-known" class="btn-main" disabled>覚えた</button>
+      <div class="btn-row">
+        <button id="btn-unsure" class="btn-main" disabled>怪しい</button>
+        <button id="btn-forgot" class="btn-main" disabled style="background:#dc3545">忘れた</button>
       </div>
     </div>
   </div>
@@ -54,69 +47,67 @@
   <script src="srs.js"></script>
   <script>
     let current = null;
-    let isRevealed = false;
+    let revealed = false;
 
     const dom = {
       card: document.getElementById('card'),
       word: document.getElementById('word'),
-      answerSection: document.getElementById('answer-section'),
+      hint: document.getElementById('tap-hint'),
+      answer: document.getElementById('answer'),
       meaning: document.getElementById('meaning'),
       example: document.getElementById('example'),
-      hint: document.getElementById('tap-hint'),
-      btns: [
-        document.getElementById('btn-known'),
-        document.getElementById('btn-unsure'),
-        document.getElementById('btn-forgot')
-      ]
+      known: document.getElementById('btn-known'),
+      unsure: document.getElementById('btn-unsure'),
+      forgot: document.getElementById('btn-forgot'),
     };
 
-    function setButtonsEnabled(on) {
-      dom.btns.forEach(btn => btn.disabled = !on);
+    function setBtns(on){
+      dom.known.disabled = !on;
+      dom.unsure.disabled = !on;
+      dom.forgot.disabled = !on;
     }
 
-    function loadNext() {
-      const nextWord = SRS.getNextWord(current ? current.id : null);
-      if (!nextWord) {
-        dom.word.innerText = "学習対象がありません";
-        dom.answerSection.classList.add('hidden');
-        dom.hint.classList.add('hidden');
-        setButtonsEnabled(false);
-        return;
-      }
+    function render(wordObj){
+      current = wordObj;
+      revealed = false;
 
-      current = nextWord;
-      isRevealed = false;
+      dom.word.textContent = wordObj ? wordObj.word : "学習対象がありません";
+      dom.meaning.textContent = wordObj ? wordObj.meaning : "";
+      dom.example.textContent = wordObj ? wordObj.example : "";
 
-      dom.word.innerText = current.word;
-      dom.meaning.innerText = current.meaning;
-      dom.example.innerText = current.example;
-
-      dom.answerSection.classList.add('hidden');
+      dom.answer.classList.add('hidden');
       dom.hint.classList.remove('hidden');
-      setButtonsEnabled(false);
+      setBtns(false);
     }
 
-    function reveal() {
-      if (isRevealed || !current) return;
-      isRevealed = true;
-      dom.answerSection.classList.remove('hidden');
+    function reveal(){
+      if(!current || revealed) return;
+      revealed = true;
+      dom.answer.classList.remove('hidden');
       dom.hint.classList.add('hidden');
-      setButtonsEnabled(true);
+      setBtns(true);
     }
 
-    function handleAnswer(isCorrect) {
-      if (!isRevealed || !current) return;
+    function next(){
+      const n = SRS.getNextWord(current ? current.id : null);
+      render(n);
+    }
+
+    function answer(isCorrect){
+      if(!current || !revealed) return;
       SRS.recordResult(current.id, isCorrect);
-      loadNext();
+      next();
     }
 
-    // カードをタップしたときだけ答えを表示
-    dom.card.addEventListener('click', (e) => {
-      e.stopPropagation();
-      reveal();
-    });
+    dom.card.addEventListener('click', reveal);
 
-    window.onload = loadNext;
+    dom.known.addEventListener('click', () => answer(true));
+    dom.unsure.addEventListener('click', () => answer(false));
+    dom.forgot.addEventListener('click', () => answer(false));
+
+    window.onload = () => {
+      try { next(); } catch(e) { dom.word.textContent = "エラー: " + e.message; }
+    };
   </script>
 </body>
 </html>
