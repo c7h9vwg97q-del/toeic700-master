@@ -4,61 +4,106 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="ui.css">
-  <title>Flashcards</title>
+  <title>Flashcard</title>
 </head>
 <body>
-  <div class="container">
-    <button class="btn-sub" onclick="location.href='index.html'">← 戻る</button>
-    <div class="card" style="min-height:300px; display:flex; flex-direction:column; justify-content:center;" onclick="toggleCard()">
-      <div id="word" class="text-large">...</div>
-      <div id="detail" class="hidden" style="margin-top:20px; border-top:1px solid #444; padding-top:20px;">
-        <div id="meaning" style="color:cyan; font-size:1.5rem; font-weight:bold;"></div>
-        <div id="example" style="font-style:italic; margin-top:10px; color:#ccc;"></div>
-        <button id="audio-btn" class="btn-sub" style="margin-top:15px;" onclick="speak(event)">🔊 発音</button>
-      </div>
-      <p id="hint" style="font-size:12px; color:#888; margin-top:20px;">タップで表示</p>
+
+<div class="container">
+
+  <div class="card" id="card">
+    <div id="word" class="text-large"></div>
+
+    <div id="hint" style="margin-top:12px; color: var(--subtext);">
+      タップで答えを表示
     </div>
-    <div id="controls" class="hidden">
-      <button class="btn-main" onclick="answer(true)" style="background:var(--accent)">覚えた</button>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-        <button class="btn-main" onclick="answer(false)" style="background:#f39c12">あやしい</button>
-        <button class="btn-main" onclick="answer(false)" style="background:var(--danger)">忘れた</button>
-      </div>
+
+    <div id="answer" class="hidden" style="margin-top:14px; text-align:left;">
+      <div style="font-size:18px; font-weight:bold;" id="meaning"></div>
+      <div style="margin-top:8px; color: var(--subtext);" id="example"></div>
     </div>
   </div>
-  <script src="data.js"></script>
-  <script src="srs.js"></script>
-  <script>
-    let current = null;
-    function load() {
-      current = SRS.getNextWord(current?.id);
-      document.getElementById('word').innerText = current.word;
-      document.getElementById('meaning').innerText = current.meaning;
-      document.getElementById('example').innerText = current.example;
-      document.getElementById('detail').classList.add('hidden');
-      document.getElementById('controls').classList.add('hidden');
-      document.getElementById('hint').classList.remove('hidden');
-      if (!window.speechSynthesis) {
-        const b = document.getElementById('audio-btn');
-        b.disabled = true; b.innerText = "音声非対応";
-      }
-    }
-    function toggleCard() {
-      document.getElementById('detail').classList.toggle('hidden');
-      document.getElementById('controls').classList.toggle('hidden');
-      document.getElementById('hint').classList.add('hidden');
-    }
-    function answer(ok) {
-      SRS.recordResult(current.id, ok);
-      load();
-    }
-    function speak(e) {
-      e.stopPropagation();
-      const u = new SpeechSynthesisUtterance(current.word);
-      u.lang = 'en-US';
-      speechSynthesis.speak(u);
-    }
-    load();
-  </script>
+
+  <div class="grid-2 mt-20">
+    <button id="btn-remember" class="btn-primary" disabled>覚えた</button>
+    <button id="btn-unsure" class="btn-outline" disabled>怪しい</button>
+  </div>
+
+  <button id="btn-forgot"
+          class="btn-primary mt-20"
+          style="background: var(--danger); width:100%;"
+          disabled>忘れた</button>
+
+</div>
+
+<script src="data.js"></script>
+<script src="srs.js"></script>
+
+<script>
+
+let current = null;
+let revealed = false;
+
+const elCard = document.getElementById("card");
+const elWord = document.getElementById("word");
+const elHint = document.getElementById("hint");
+const elAnswer = document.getElementById("answer");
+const elMeaning = document.getElementById("meaning");
+const elExample = document.getElementById("example");
+
+const btnRemember = document.getElementById("btn-remember");
+const btnUnsure = document.getElementById("btn-unsure");
+const btnForgot = document.getElementById("btn-forgot");
+
+function setButtonsEnabled(on) {
+  btnRemember.disabled = !on;
+  btnUnsure.disabled = !on;
+  btnForgot.disabled = !on;
+}
+
+function hideAnswer() {
+  revealed = false;
+  elAnswer.classList.add("hidden");
+  elHint.classList.remove("hidden");
+  setButtonsEnabled(false);
+}
+
+function showAnswer() {
+  revealed = true;
+  elAnswer.classList.remove("hidden");
+  elHint.classList.add("hidden");
+  setButtonsEnabled(true);
+}
+
+function renderCard(wordObj) {
+  current = wordObj;
+  elWord.textContent = wordObj.word;
+  elMeaning.textContent = wordObj.meaning;
+  elExample.textContent = wordObj.example;
+  hideAnswer();
+}
+
+elCard.addEventListener("click", () => {
+  if (!revealed) showAnswer();
+});
+
+btnRemember.addEventListener("click", () => {
+  SRS.recordResult(current.id, true);
+  renderCard(SRS.getNextWord(current.id));
+});
+
+btnUnsure.addEventListener("click", () => {
+  SRS.recordResult(current.id, false);
+  renderCard(SRS.getNextWord(current.id));
+});
+
+btnForgot.addEventListener("click", () => {
+  SRS.recordResult(current.id, false);
+  renderCard(SRS.getNextWord(current.id));
+});
+
+renderCard(SRS.getNextWord());
+
+</script>
+
 </body>
 </html>
