@@ -6,6 +6,9 @@
   <link rel="stylesheet" href="ui.css">
   <title>Flashcards - TOEIC 700 Master</title>
   <style>
+    /* 追加: hidden を確実に効かせる */
+    .hidden { display: none !important; }
+
     #version-tag { font-size: 10px; color: var(--sub); position: absolute; top: 10px; right: 10px; opacity: 0.6; }
     #card { 
       min-height: 280px; 
@@ -72,7 +75,6 @@
     </div>
   </div>
 
-  <!-- 依存ファイルの読み込み -->
   <script src="data.js"></script>
   <script src="srs.js"></script>
 
@@ -100,9 +102,6 @@
         ]
       };
 
-      /**
-       * 初期化と依存関係チェック
-       */
       function init() {
         if (typeof window.wordData === 'undefined' || typeof window.SRS === 'undefined') {
           console.error('Dependency Error: wordData or SRS not found.');
@@ -113,9 +112,6 @@
         renderNext();
       }
 
-      /**
-       * 次の単語をロードして表示
-       */
       function renderNext() {
         isProcessing = false;
         isRevealed = false;
@@ -131,12 +127,10 @@
 
           currentWord = next;
           
-          // UI表示の更新
           elements.word.innerText = currentWord.word;
           elements.meaning.innerText = currentWord.meaning;
           elements.example.innerText = currentWord.example;
           
-          // 状態のリセット
           elements.answerArea.classList.add('hidden');
           elements.hint.classList.remove('hidden');
           elements.btns.forEach(btn => btn.disabled = true);
@@ -147,9 +141,6 @@
         }
       }
 
-      /**
-       * 答えを表示
-       */
       function reveal() {
         if (isRevealed || !currentWord) return;
         
@@ -159,21 +150,14 @@
         elements.btns.forEach(btn => btn.disabled = false);
       }
 
-      /**
-       * 回答ボタン押下時の処理
-       */
       window.handleAction = function(isCorrect) {
         if (isProcessing || !isRevealed || !currentWord) return;
         
-        isProcessing = true; // 二重押し防止
+        isProcessing = true;
         
         try {
-          // SRS.recordResult(id, boolean) を実行
           SRS.recordResult(currentWord.id, isCorrect);
-          
-          // フィードバック（一瞬ボタンを無効化）
           elements.btns.forEach(btn => btn.disabled = true);
-          
           renderNext();
         } catch (e) {
           console.error('Record Error:', e);
@@ -181,18 +165,13 @@
         }
       };
 
-      // カードタップイベント
       elements.card.addEventListener('click', (e) => {
         e.preventDefault();
         reveal();
       });
 
-      // Safari用タップアクションの向上
-      document.addEventListener('touchstart', () => {}, {passive: true});
-
-      // ページ読み込み完了時に実行
+      document.addEventListener('touchstart', () => {}, { passive: true });
       window.addEventListener('DOMContentLoaded', init);
-
     })();
   </script>
 </body>
