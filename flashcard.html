@@ -4,110 +4,196 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <link rel="stylesheet" href="ui.css">
-  <title>Flashcards - TOEIC 700 SRS</title>
+  <title>Flashcards - TOEIC 700 Master</title>
   <style>
-    #version-tag{font-size:10px;opacity:.7;position:fixed;top:10px;right:10px}
-    #card{min-height:240px;display:flex;flex-direction:column;justify-content:center;align-items:center;cursor:pointer}
-    #answer{width:100%;margin-top:18px;padding-top:18px;border-top:1px dashed #444}
-    #meaning{font-size:1.4rem;font-weight:700;margin-bottom:8px}
-    #example{font-size:.95rem;opacity:.85;font-style:italic}
-    button:disabled{opacity:.35;cursor:not-allowed}
-    .btn-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    #version-tag { font-size: 10px; color: var(--sub); position: absolute; top: 10px; right: 10px; opacity: 0.6; }
+    #card { 
+      min-height: 280px; 
+      display: flex; 
+      flex-direction: column; 
+      justify-content: center; 
+      align-items: center; 
+      cursor: pointer; 
+      transition: background-color 0.2s;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    #card:active { background-color: rgba(255, 255, 255, 0.05); }
+    #answer-area { 
+      margin-top: 24px; 
+      padding-top: 20px; 
+      border-top: 1px dashed #444; 
+      width: 100%; 
+      text-align: center;
+    }
+    #meaning { font-size: 1.6rem; color: var(--accent); font-weight: bold; margin-bottom: 12px; }
+    #example { font-style: italic; color: var(--sub); font-size: 0.95rem; line-height: 1.4; padding: 0 10px; }
+    #tap-hint { margin-top: 20px; font-size: 12px; color: #777; font-weight: normal; }
+    
+    .btn-container { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+    .btn-sub-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    
+    button:disabled { 
+      opacity: 0.2; 
+      cursor: not-allowed; 
+      filter: grayscale(1); 
+      pointer-events: none;
+    }
+    .error-msg { color: var(--danger); text-align: center; margin-top: 50px; }
   </style>
 </head>
 <body>
   <div id="version-tag">FLASHCARD v3</div>
-
   <div class="container">
-    <button class="btn-main" onclick="location.href='index.html'" style="width:auto;margin-bottom:12px">← 戻る</button>
-
-    <div class="card" id="card">
-      <div id="word" class="text-large">読み込み中...</div>
-
-      <div id="tap-hint" style="margin-top:14px;font-size:12px;opacity:.7;">
-        タップで答えを表示
+    <button class="btn-outline" style="margin-bottom: 20px; width: auto; min-height: 40px;" onclick="location.href='index.html'">← 戻る</button>
+    
+    <div id="main-content">
+      <div class="card" id="card">
+        <div id="word" class="text-large">読み込み中...</div>
+        <div id="answer-area" class="hidden">
+          <div id="meaning"></div>
+          <div id="example"></div>
+        </div>
+        <div id="tap-hint">タップで答えを表示</div>
       </div>
 
-      <div id="answer" class="hidden">
-        <div id="meaning"></div>
-        <div id="example"></div>
+      <div class="mt-20 btn-container">
+        <button id="btn-known" class="btn-primary" disabled onclick="handleAction(true)">覚えた</button>
+        <div class="btn-sub-row">
+          <button id="btn-unsure" class="btn-outline" disabled onclick="handleAction(false)">怪しい</button>
+          <button id="btn-forgot" class="btn-outline" style="color: var(--danger); border-color: var(--danger);" disabled onclick="handleAction(false)">忘れた</button>
+        </div>
       </div>
     </div>
-
-    <div style="margin-top:14px;display:grid;gap:10px;">
-      <button id="btn-known" class="btn-main" disabled>覚えた</button>
-      <div class="btn-row">
-        <button id="btn-unsure" class="btn-main" disabled>怪しい</button>
-        <button id="btn-forgot" class="btn-main" disabled style="background:#dc3545">忘れた</button>
-      </div>
+    
+    <div id="error-screen" class="hidden error-msg">
+      <p>データの読み込みに失敗しました。<br>data.js または srs.js が正しく読み込まれているか確認してください。</p>
+      <button class="btn-primary" onclick="location.reload()">再読み込み</button>
     </div>
   </div>
 
+  <!-- 依存ファイルの読み込み -->
   <script src="data.js"></script>
   <script src="srs.js"></script>
+
   <script>
-    let current = null;
-    let revealed = false;
+    (() => {
+      'use strict';
 
-    const dom = {
-      card: document.getElementById('card'),
-      word: document.getElementById('word'),
-      hint: document.getElementById('tap-hint'),
-      answer: document.getElementById('answer'),
-      meaning: document.getElementById('meaning'),
-      example: document.getElementById('example'),
-      known: document.getElementById('btn-known'),
-      unsure: document.getElementById('btn-unsure'),
-      forgot: document.getElementById('btn-forgot'),
-    };
+      let currentWord = null;
+      let isRevealed = false;
+      let isProcessing = false;
 
-    function setBtns(on){
-      dom.known.disabled = !on;
-      dom.unsure.disabled = !on;
-      dom.forgot.disabled = !on;
-    }
+      const elements = {
+        card: document.getElementById('card'),
+        word: document.getElementById('word'),
+        meaning: document.getElementById('meaning'),
+        example: document.getElementById('example'),
+        answerArea: document.getElementById('answer-area'),
+        hint: document.getElementById('tap-hint'),
+        mainContent: document.getElementById('main-content'),
+        errorScreen: document.getElementById('error-screen'),
+        btns: [
+          document.getElementById('btn-known'),
+          document.getElementById('btn-unsure'),
+          document.getElementById('btn-forgot')
+        ]
+      };
 
-    function render(wordObj){
-      current = wordObj;
-      revealed = false;
+      /**
+       * 初期化と依存関係チェック
+       */
+      function init() {
+        if (typeof window.wordData === 'undefined' || typeof window.SRS === 'undefined') {
+          console.error('Dependency Error: wordData or SRS not found.');
+          elements.mainContent.classList.add('hidden');
+          elements.errorScreen.classList.remove('hidden');
+          return;
+        }
+        renderNext();
+      }
 
-      dom.word.textContent = wordObj ? wordObj.word : "学習対象がありません";
-      dom.meaning.textContent = wordObj ? wordObj.meaning : "";
-      dom.example.textContent = wordObj ? wordObj.example : "";
+      /**
+       * 次の単語をロードして表示
+       */
+      function renderNext() {
+        isProcessing = false;
+        isRevealed = false;
+        
+        try {
+          const next = SRS.getNextWord(currentWord ? currentWord.id : null);
+          
+          if (!next) {
+            elements.word.innerText = "学習対象が見つかりません";
+            elements.hint.classList.add('hidden');
+            return;
+          }
 
-      dom.answer.classList.add('hidden');
-      dom.hint.classList.remove('hidden');
-      setBtns(false);
-    }
+          currentWord = next;
+          
+          // UI表示の更新
+          elements.word.innerText = currentWord.word;
+          elements.meaning.innerText = currentWord.meaning;
+          elements.example.innerText = currentWord.example;
+          
+          // 状態のリセット
+          elements.answerArea.classList.add('hidden');
+          elements.hint.classList.remove('hidden');
+          elements.btns.forEach(btn => btn.disabled = true);
+          
+        } catch (e) {
+          console.error('SRS Error:', e);
+          elements.word.innerText = "エラーが発生しました";
+        }
+      }
 
-    function reveal(){
-      if(!current || revealed) return;
-      revealed = true;
-      dom.answer.classList.remove('hidden');
-      dom.hint.classList.add('hidden');
-      setBtns(true);
-    }
+      /**
+       * 答えを表示
+       */
+      function reveal() {
+        if (isRevealed || !currentWord) return;
+        
+        isRevealed = true;
+        elements.answerArea.classList.remove('hidden');
+        elements.hint.classList.add('hidden');
+        elements.btns.forEach(btn => btn.disabled = false);
+      }
 
-    function next(){
-      const n = SRS.getNextWord(current ? current.id : null);
-      render(n);
-    }
+      /**
+       * 回答ボタン押下時の処理
+       */
+      window.handleAction = function(isCorrect) {
+        if (isProcessing || !isRevealed || !currentWord) return;
+        
+        isProcessing = true; // 二重押し防止
+        
+        try {
+          // SRS.recordResult(id, boolean) を実行
+          SRS.recordResult(currentWord.id, isCorrect);
+          
+          // フィードバック（一瞬ボタンを無効化）
+          elements.btns.forEach(btn => btn.disabled = true);
+          
+          renderNext();
+        } catch (e) {
+          console.error('Record Error:', e);
+          isProcessing = false;
+        }
+      };
 
-    function answer(isCorrect){
-      if(!current || !revealed) return;
-      SRS.recordResult(current.id, isCorrect);
-      next();
-    }
+      // カードタップイベント
+      elements.card.addEventListener('click', (e) => {
+        e.preventDefault();
+        reveal();
+      });
 
-    dom.card.addEventListener('click', reveal);
+      // Safari用タップアクションの向上
+      document.addEventListener('touchstart', () => {}, {passive: true});
 
-    dom.known.addEventListener('click', () => answer(true));
-    dom.unsure.addEventListener('click', () => answer(false));
-    dom.forgot.addEventListener('click', () => answer(false));
+      // ページ読み込み完了時に実行
+      window.addEventListener('DOMContentLoaded', init);
 
-    window.onload = () => {
-      try { next(); } catch(e) { dom.word.textContent = "エラー: " + e.message; }
-    };
+    })();
   </script>
 </body>
 </html>
