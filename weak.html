@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link rel="stylesheet" href="ui.css">
+  <title>Weak Mode - TOEIC 700 Master</title>
+  <style>
+    #version-tag { font-size: 10px; color: var(--subtext); position: absolute; top: 10px; right: 10px; opacity: 0.7; }
+    #card { min-height: 250px; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; }
+    #answer-section { margin-top: 20px; padding-top: 20px; border-top: 1px dashed #444; width: 100%; }
+    #meaning { font-size: 1.5rem; color: var(--accent); font-weight: bold; margin-bottom: 10px; }
+    #example { font-style: italic; color: var(--subtext); font-size: 0.9rem; }
+    .btn-group { display: grid; gap: 10px; width: 100%; }
+    .sub-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    button:disabled { opacity: 0.3; cursor: not-allowed; }
+    .status-msg { text-align: center; margin-top: 50px; }
+  </style>
+</head>
+<body>
+
+<div id="version-tag">WEAK MODE v2</div>
+
+<div class="container">
+  <button class="btn-outline" style="margin-bottom: 20px; width: auto;" onclick="location.href='index.html'">← 戻る</button>
+
+  <div id="learning-ui">
+    <div class="card" id="card">
+      <div id="word" class="text-large"></div>
+
+      <div id="answer-section" class="hidden">
+        <div id="meaning"></div>
+        <div id="example"></div>
+      </div>
+
+      <div id="tap-hint" style="margin-top: 20px; font-size: 12px; color: #666;">
+        タップで答えを表示
+      </div>
+    </div>
+
+    <div class="mt-20 btn-group">
+      <button id="btn-known" class="btn-primary" disabled>覚えた</button>
+      <div class="sub-group">
+        <button id="btn-unsure" class="btn-outline" disabled>怪しい</button>
+        <button id="btn-forgot"
+                class="btn-outline"
+                style="color: var(--danger); border-color: var(--danger);"
+                disabled>忘れた</button>
+      </div>
+    </div>
+
+    <p id="remaining-count"
+       style="text-align:center; font-size:12px; color:var(--subtext); margin-top:15px;">
+    </p>
+  </div>
+
+  <div id="empty-ui" class="hidden status-msg">
+    <div class="text-large">🎉 Clear!</div>
+    <p>現在、弱点単語（正答率70%未満）はありません。</p>
+    <button class="btn-primary mt-20" onclick="location.href='index.html'">ホームへ戻る</button>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script src="srs.js"></script>
+
+<script>
+let weakQueue = [];
+let current = null;
+let isRevealed = false;
+
+const dom = {
+  card: document.getElementById('card'),
+  word: document.getElementById('word'),
+  answer: document.getElementById('answer-section'),
+  meaning: document.getElementById('meaning'),
+  example: document.getElementById('example'),
+  hint: document.getElementById('tap-hint'),
+  remaining: document.getElementById('remaining-count'),
+  learningUI: document.getElementById('learning-ui'),
+  emptyUI: document.getElementById('empty-ui'),
+  btns: [
+    document.getElementById('btn-known'),
+    document.getElementById('btn-unsure'),
+    document.getElementById('btn-forgot')
+  ]
+};
+
+function setButtons(on) {
+  dom.btns.forEach(b => b.disabled = !on);
+}
+
+function buildWeakQueue() {
+  const stats = SRS.getStats();
+  weakQueue = wordData.filter(w => {
+    const s = stats[w.id];
+    if (!s) return false;
+    const total = s.correct + s.wrong;
+    if (total === 0) return false;
+    const acc = s.correct / total;
+    return acc < 0.7;
+  });
+}
+
+function loadNext() {
+  if (weakQueue.length === 0) {
+    dom.learningUI.classList.add('hidden');
+    dom.emptyUI.classList.remove('hidden');
+    return;
+  }
+
+  current = weakQueue.shift();
+  isRevealed = false;
+
+  dom.word.innerText = current.word;
+  dom.meaning.innerText = current.meaning;
+  dom.example.innerText = current.example;
+
+  dom.answer.classList.add('hidden');
+  dom.hint.classList.remove('hidden');
+  setButtons(false);
+
+  dom.remaining.innerText = "残り " + weakQueue.length + " 単語";
+}
+
+function reveal() {
+  if (!current || isRevealed) return;
+  isRevealed = true;
+  dom.answer.classList.remove('hidden');
+  dom.hint.classList.add('hidden');
+  setButtons(true);
+}
+
+function handleAnswer(isCorrect) {
+  if (!current || !isRevealed) return;
+  SRS.recordResult(current.id, isCorrect);
+  buildWeakQueue();
+  loadNext();
+}
+
+dom.card.addEventListener('click', reveal);
+
+document.getElementById('btn-known').onclick = () => handleAnswer(true);
+document.getElementById('btn-unsure').onclick = () => handleAnswer(false);
+document.getElementById('btn-forgot').onclick = () => handleAnswer(false);
+
+window.onload = function() {
+  buildWeakQueue();
+  loadNext();
+};
+</script>
+
+</body>
+</html>
