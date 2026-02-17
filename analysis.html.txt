@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="ui.css">
+  <title>Analysis</title>
+</head>
+<body>
+  <div class="container">
+    <button class="btn-sub" onclick="location.href='index.html'">← 戻る</button>
+    <h1>弱点分析</h1>
+    <div class="card">
+      <input type="text" id="search" placeholder="単語を検索..." oninput="render()" style="width:100%; padding:10px; border-radius:8px; border:none;">
+      <div style="display:flex; gap:10px; margin-top:10px;">
+        <button class="btn-sub" onclick="setFilter('all')">全て</button>
+        <button class="btn-sub" onclick="setFilter('due')">Due</button>
+        <button class="btn-sub" onclick="setFilter('weak')">Weak</button>
+      </div>
+    </div>
+    <div id="list"></div>
+    <button class="btn-main" style="background:var(--danger); margin-top:40px;" onclick="resetData()">全データ初期化</button>
+  </div>
+  <script src="data.js"></script>
+  <script src="srs.js"></script>
+  <script>
+    let filter = 'all';
+    function setFilter(f) { filter = f; render(); }
+    function render() {
+      const stats = SRS.getStats();
+      const q = document.getElementById('search').value.toLowerCase();
+      const box = document.getElementById('list');
+      box.innerHTML = '';
+      const now = Date.now();
+      
+      const filtered = wordData.filter(w => {
+        const s = stats[w.id];
+        const matchSearch = w.word.toLowerCase().includes(q);
+        if (filter === 'due') return matchSearch && s?.dueAt <= now;
+        if (filter === 'weak') return matchSearch && s && (s.correct/(s.correct+s.wrong) < 0.7);
+        return matchSearch;
+      });
+
+      filtered.forEach(w => {
+        const s = stats[w.id] || {correct:0, wrong:0, intervalDays:0, dueAt:0};
+        const acc = s.correct+s.wrong === 0 ? 0 : Math.round(s.correct*100/(s.correct+s.wrong));
+        const item = document.createElement('div');
+        item.className = 'card';
+        item.style.textAlign = 'left';
+        item.innerHTML = `
+          <strong>${w.word}</strong> <small>${w.meaning}</small><br>
+          正答率: ${acc}% | 間隔: ${s.intervalDays}日<br>
+          <small>次回: ${s.dueAt ? new Date(s.dueAt).toLocaleDateString() : '未学習'}</small>
+        `;
+        box.appendChild(item);
+      });
+    }
+    function resetData() {
+      if (confirm('全ての進捗を削除しますか？')) {
+        localStorage.clear();
+        location.reload();
+      }
+    }
+    render();
+  </script>
+</body>
+</html>

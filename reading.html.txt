@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="ui.css">
+  <title>Reading</title>
+</head>
+<body>
+  <div class="container">
+    <button class="btn-sub" onclick="location.href='index.html'">← 戻る</button>
+    <div id="game">
+      <div class="card" style="text-align:left;">
+        <h3 id="p-title"></h3>
+        <p id="p-text" style="background:#222; padding:15px; border-radius:10px; line-height:1.8;"></p>
+      </div>
+      <div id="q-area">
+        <div class="card">
+          <p id="q-text" style="font-weight:bold;"></p>
+          <div id="choices" style="display:grid; gap:10px;"></div>
+        </div>
+      </div>
+    </div>
+    <div id="result" class="card hidden">
+      <h2 id="res-msg"></h2>
+      <button class="btn-main" onclick="nextPassage()">次のパッセージへ</button>
+    </div>
+  </div>
+  <script src="data.js"></script>
+  <script src="srs.js"></script>
+  <script>
+    let pIdx = 0, qIdx = 0;
+    function loadPassage() {
+      const p = passageData[pIdx];
+      document.getElementById('p-title').innerText = p.title;
+      document.getElementById('p-text').innerText = p.text;
+      loadQuestion();
+    }
+    function loadQuestion() {
+      const p = passageData[pIdx];
+      const q = p.questions[qIdx];
+      document.getElementById('q-text').innerText = `Q${qIdx+1}: ${q.q}`;
+      const box = document.getElementById('choices');
+      box.innerHTML = '';
+      q.options.forEach(o => {
+        const b = document.createElement('button');
+        b.className = 'btn-sub';
+        b.innerText = o;
+        b.onclick = () => answer(o === q.ans);
+        box.appendChild(b);
+      });
+    }
+    function answer(ok) {
+      const p = passageData[pIdx];
+      if (p.questions[qIdx].type === 'vocab') {
+        SRS.recordResult(p.targetId, ok);
+      }
+      if (ok) {
+        if (qIdx < p.questions.length - 1) {
+          qIdx++; loadQuestion();
+        } else {
+          showResult(true);
+        }
+      } else {
+        alert("不正解！もう一度選んでください。");
+      }
+    }
+    function showResult(ok) {
+      document.getElementById('game').classList.add('hidden');
+      document.getElementById('result').classList.remove('hidden');
+      document.getElementById('res-msg').innerText = "パッセージ完了！";
+    }
+    function nextPassage() {
+      pIdx = (pIdx + 1) % passageData.length;
+      qIdx = 0;
+      document.getElementById('game').classList.remove('hidden');
+      document.getElementById('result').classList.add('hidden');
+      loadPassage();
+    }
+    loadPassage();
+  </script>
+</body>
+</html>

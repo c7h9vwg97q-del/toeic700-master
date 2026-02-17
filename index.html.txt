@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="ui.css">
+  <title>TOEIC 700 SRS</title>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h2 id="lvl">Level 1</h2>
+      <div class="progress-bar"><div id="xp-bar" class="progress-fill"></div></div>
+      <small id="xp-val">0 / 200 XP</small>
+    </div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+      <div class="card"><div class="text-large" id="due-cnt">0</div><small>復習期限</small></div>
+      <div class="card"><div class="text-large" id="weak-cnt">0</div><small>弱点単語</small></div>
+    </div>
+    <div class="card">継続日数: <span id="streak" style="color:orange; font-weight:bold;">0</span> 日</div>
+    <button class="btn-main" onclick="location.href='flashcard.html'">🗂️ フラッシュカード</button>
+    <button class="btn-main" onclick="location.href='quiz.html'" style="background:#6c5ce7">📝 4択クイズ</button>
+    <button class="btn-main" onclick="location.href='reading.html'" style="background:#e17055">📚 長文読解</button>
+  </div>
+  <nav class="bottom-nav">
+    <a href="index.html" style="color:var(--primary)">Home</a>
+    <a href="analysis.html">Analysis</a>
+  </nav>
+  <script src="data.js"></script>
+  <script src="srs.js"></script>
+  <script>
+    const user = SRS.getUser();
+    const stats = SRS.getStats();
+    const now = Date.now();
+    document.getElementById('lvl').innerText = `Level ${Math.floor(user.xp/200)+1}`;
+    document.getElementById('xp-bar').style.width = (user.xp%200)/2 + '%';
+    document.getElementById('xp-val').innerText = `${user.xp%200} / 200 XP`;
+    document.getElementById('streak').innerText = user.streak;
+    document.getElementById('due-cnt').innerText = wordData.filter(w => stats[w.id]?.dueAt <= now).length;
+    document.getElementById('weak-cnt').innerText = wordData.filter(w => {
+      const s = stats[w.id]; return s && (s.correct+s.wrong > 0) && (s.correct/(s.correct+s.wrong) < 0.7);
+    }).length;
+  </script>
+</body>
+</html>

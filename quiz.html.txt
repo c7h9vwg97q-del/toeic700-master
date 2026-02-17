@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="ui.css">
+  <title>Quiz</title>
+</head>
+<body>
+  <div class="container">
+    <div id="q-header" style="display:flex; justify-content:space-between; margin-bottom:10px;">
+      <button onclick="location.href='index.html'">← 戻る</button>
+      <div id="combo-tag" style="background:orange; padding:5px 10px; border-radius:10px; font-weight:bold;">Combo 0</div>
+    </div>
+    <div class="card">
+      <small id="mode-text">英→日</small>
+      <div id="question" class="text-large" style="font-size:1.8rem; margin:20px 0;">...</div>
+      <div id="choices" style="display:grid; gap:10px;"></div>
+    </div>
+    <div id="feedback" class="card hidden"></div>
+    <button id="next-btn" class="btn-main hidden" onclick="load()">次へ</button>
+  </div>
+  <script src="data.js"></script>
+  <script src="srs.js"></script>
+  <script>
+    let current = null;
+    function load() {
+      current = SRS.getNextWord(current?.id);
+      const modes = ['en-jp', 'jp-en', 'fill'];
+      const mode = modes[Math.floor(Math.random()*3)];
+      let q, ans;
+      if (mode === 'en-jp') { q = current.word; ans = current.meaning; }
+      else if (mode === 'jp-en') { q = current.meaning; ans = current.word; }
+      else { q = current.example.replace(current.word, "____"); ans = current.word; }
+      
+      document.getElementById('mode-text').innerText = mode.toUpperCase();
+      document.getElementById('question').innerText = q;
+      document.getElementById('feedback').classList.add('hidden');
+      document.getElementById('next-btn').classList.add('hidden');
+      document.getElementById('combo-tag').innerText = "Combo " + SRS.getUser().combo;
+
+      const others = wordData.filter(w => w.id !== current.id).sort(() => .5 - Math.random()).slice(0, 3)
+                      .map(w => (mode === 'en-jp') ? w.meaning : w.word);
+      const choices = [...others, ans].sort(() => .5 - Math.random());
+      
+      const box = document.getElementById('choices');
+      box.innerHTML = '';
+      choices.forEach(c => {
+        const b = document.createElement('button');
+        b.className = 'btn-sub';
+        b.innerText = c;
+        b.onclick = () => check(c === ans);
+        box.appendChild(b);
+      });
+    }
+    function check(isCorrect) {
+      SRS.recordResult(current.id, isCorrect);
+      const fb = document.getElementById('feedback');
+      fb.innerText = isCorrect ? "⭕ 正解！ +XP" : "❌ 不正解: " + current.word;
+      fb.style.color = isCorrect ? "var(--accent)" : "var(--danger)";
+      fb.classList.remove('hidden');
+      document.getElementById('next-btn').classList.remove('hidden');
+    }
+    load();
+  </script>
+</body>
+</html>
