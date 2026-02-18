@@ -6,10 +6,10 @@
   <link rel="stylesheet" href="ui.css">
   <title>Flashcards - TOEIC 700 Master</title>
   <style>
-    /* 追加: hidden を確実に効かせる */
-    .hidden { display: none !important; }
-
     #version-tag { font-size: 10px; color: var(--sub); position: absolute; top: 10px; right: 10px; opacity: 0.6; }
+
+    /* cardがボタンを覆う事故を防ぐ */
+    #main-content { position: relative; }
     #card { 
       min-height: 280px; 
       display: flex; 
@@ -20,8 +20,11 @@
       transition: background-color 0.2s;
       -webkit-tap-highlight-color: transparent;
       user-select: none;
+      position: relative;
+      z-index: 1;
     }
     #card:active { background-color: rgba(255, 255, 255, 0.05); }
+
     #answer-area { 
       margin-top: 24px; 
       padding-top: 20px; 
@@ -32,21 +35,29 @@
     #meaning { font-size: 1.6rem; color: var(--accent); font-weight: bold; margin-bottom: 12px; }
     #example { font-style: italic; color: var(--sub); font-size: 0.95rem; line-height: 1.4; padding: 0 10px; }
     #tap-hint { margin-top: 20px; font-size: 12px; color: #777; font-weight: normal; }
-    
-    .btn-container { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+
+    .btn-container { 
+      display: flex; 
+      flex-direction: column; 
+      gap: 12px; 
+      width: 100%; 
+      position: relative;
+      z-index: 2; /* ボタンを最前面へ */
+    }
     .btn-sub-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    
+
     button:disabled { 
       opacity: 0.2; 
       cursor: not-allowed; 
       filter: grayscale(1); 
       pointer-events: none;
     }
+
     .error-msg { color: var(--danger); text-align: center; margin-top: 50px; }
   </style>
 </head>
 <body>
-  <div id="version-tag">FLASHCARD v3</div>
+  <div id="version-tag">FLASHCARD v3.1</div>
   <div class="container">
     <button class="btn-outline" style="margin-bottom: 20px; width: auto; min-height: 40px;" onclick="location.href='index.html'">← 戻る</button>
     
@@ -61,16 +72,16 @@
       </div>
 
       <div class="mt-20 btn-container">
-        <button id="btn-known" class="btn-primary" disabled onclick="handleAction(true)">覚えた</button>
+        <button id="btn-known" class="btn-primary" disabled>覚えた</button>
         <div class="btn-sub-row">
-          <button id="btn-unsure" class="btn-outline" disabled onclick="handleAction(false)">怪しい</button>
-          <button id="btn-forgot" class="btn-outline" style="color: var(--danger); border-color: var(--danger);" disabled onclick="handleAction(false)">忘れた</button>
+          <button id="btn-unsure" class="btn-outline" disabled>怪しい</button>
+          <button id="btn-forgot" class="btn-outline" style="color: var(--danger); border-color: var(--danger);" disabled>忘れた</button>
         </div>
       </div>
     </div>
     
     <div id="error-screen" class="hidden error-msg">
-      <p>データの読み込みに失敗しました。<br>data.js または srs.js が正しく読み込まれているか確認してください。</p>
+      <p>データの読み込みに失敗しました.<br>data.js または srs.js が正しく読み込まれているか確認してください.</p>
       <button class="btn-primary" onclick="location.reload()">再読み込み</button>
     </div>
   </div>
@@ -86,7 +97,7 @@
       let isRevealed = false;
       let isProcessing = false;
 
-      const elements = {
+      const el = {
         card: document.getElementById('card'),
         word: document.getElementById('word'),
         meaning: document.getElementById('meaning'),
@@ -95,82 +106,98 @@
         hint: document.getElementById('tap-hint'),
         mainContent: document.getElementById('main-content'),
         errorScreen: document.getElementById('error-screen'),
-        btns: [
-          document.getElementById('btn-known'),
-          document.getElementById('btn-unsure'),
-          document.getElementById('btn-forgot')
-        ]
+        btnKnown: document.getElementById('btn-known'),
+        btnUnsure: document.getElementById('btn-unsure'),
+        btnForgot: document.getElementById('btn-forgot')
       };
+
+      const btns = [el.btnKnown, el.btnUnsure, el.btnForgot];
+
+      function setButtonsEnabled(enabled) {
+        btns.forEach(b => {
+          b.disabled = !enabled;
+        });
+      }
 
       function init() {
         if (typeof window.wordData === 'undefined' || typeof window.SRS === 'undefined') {
           console.error('Dependency Error: wordData or SRS not found.');
-          elements.mainContent.classList.add('hidden');
-          elements.errorScreen.classList.remove('hidden');
+          el.mainContent.classList.add('hidden');
+          el.errorScreen.classList.remove('hidden');
           return;
         }
+
+        // ボタンイベントはJSで付ける．onclick依存を消す
+        el.btnKnown.addEventListener('click', () => handleAction(true));
+        el.btnUnsure.addEventListener('click', () => handleAction(false));
+        el.btnForgot.addEventListener('click', () => handleAction(false));
+
         renderNext();
       }
 
       function renderNext() {
         isProcessing = false;
         isRevealed = false;
-        
+
         try {
           const next = SRS.getNextWord(currentWord ? currentWord.id : null);
-          
+
           if (!next) {
-            elements.word.innerText = "学習対象が見つかりません";
-            elements.hint.classList.add('hidden');
+            el.word.innerText = "学習対象が見つかりません";
+            el.hint.classList.add('hidden');
+            setButtonsEnabled(false);
             return;
           }
 
           currentWord = next;
-          
-          elements.word.innerText = currentWord.word;
-          elements.meaning.innerText = currentWord.meaning;
-          elements.example.innerText = currentWord.example;
-          
-          elements.answerArea.classList.add('hidden');
-          elements.hint.classList.remove('hidden');
-          elements.btns.forEach(btn => btn.disabled = true);
-          
+
+          el.word.innerText = currentWord.word;
+          el.meaning.innerText = currentWord.meaning;
+          el.example.innerText = currentWord.example;
+
+          el.answerArea.classList.add('hidden');
+          el.hint.classList.remove('hidden');
+          setButtonsEnabled(false);
+
         } catch (e) {
           console.error('SRS Error:', e);
-          elements.word.innerText = "エラーが発生しました";
+          el.word.innerText = "エラーが発生しました";
         }
       }
 
       function reveal() {
         if (isRevealed || !currentWord) return;
-        
+
         isRevealed = true;
-        elements.answerArea.classList.remove('hidden');
-        elements.hint.classList.add('hidden');
-        elements.btns.forEach(btn => btn.disabled = false);
+        el.answerArea.classList.remove('hidden');
+        el.hint.classList.add('hidden');
+        setButtonsEnabled(true);
       }
 
-      window.handleAction = function(isCorrect) {
+      function handleAction(isCorrect) {
         if (isProcessing || !isRevealed || !currentWord) return;
-        
+
         isProcessing = true;
-        
+
         try {
           SRS.recordResult(currentWord.id, isCorrect);
-          elements.btns.forEach(btn => btn.disabled = true);
+          setButtonsEnabled(false);
           renderNext();
         } catch (e) {
           console.error('Record Error:', e);
           isProcessing = false;
         }
-      };
+      }
 
-      elements.card.addEventListener('click', (e) => {
-        e.preventDefault();
+      // iPhone対策．clickとtouchend両方でreveal
+      el.card.addEventListener('click', (e) => {
         reveal();
       });
 
-      document.addEventListener('touchstart', () => {}, { passive: true });
+      el.card.addEventListener('touchend', (e) => {
+        reveal();
+      }, { passive: true });
+
       window.addEventListener('DOMContentLoaded', init);
     })();
   </script>
