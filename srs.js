@@ -47,31 +47,30 @@ const SRS = {
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
 
-      if (last && last.toLocaleDateString() === yesterday.toLocaleDateString()) {
-        user.streak++;
-      } else {
-        user.streak = 1;
-      }
+      if (last && last.toLocaleDateString() === yesterday.toLocaleDateString()) user.streak++;
+      else user.streak = 1;
+
       user.lastDate = today;
     }
     SRS.setUser(user);
   },
 
-  // 直近履歴を保持して，同じ単語の連続出題を防ぐ
+  // 直近履歴
   getRecent: () => JSON.parse(localStorage.getItem('toeic_recent') || '[]'),
   setRecent: (arr) => localStorage.setItem('toeic_recent', JSON.stringify(arr)),
   pushRecent: (id) => {
-    const MAX = 12; // 直近12語は避ける
+    const MAX = 12;
     const arr = SRS.getRecent().filter(x => x !== id);
     arr.unshift(id);
     if (arr.length > MAX) arr.length = MAX;
     SRS.setRecent(arr);
   },
 
-  // 重み付きで次を選ぶ
+  // 次の単語を選ぶ
   getNextWord: (excludeId = null) => {
     const stats = SRS.getStats();
     const now = Date.now();
+
     const recent = new Set(SRS.getRecent());
     if (excludeId) recent.add(excludeId);
 
@@ -80,31 +79,28 @@ const SRS = {
       const s = stats[w.id];
       return s && (s.correct + s.wrong > 0) && (s.correct / (s.correct + s.wrong) < 0.7);
     };
-    const isNew = (w) => !stats[w.id] || (stats[w.id].correct + stats[w.id].wrong === 0);
+    const isNew = (w) => !stats[w.id] || ((stats[w.id].correct + stats[w.id].wrong) === 0);
 
-    // 候補作成
+    // 直近は徹底して除外
     const dueList = wordData.filter(w => isDue(w) && !recent.has(w.id));
     const weakList = wordData.filter(w => isWeak(w) && !recent.has(w.id));
     const newList = wordData.filter(w => isNew(w) && !recent.has(w.id));
     const anyList = wordData.filter(w => !recent.has(w.id));
 
-    // フォールバック 直近除外で空なら除外解除
-    const dueList2 = dueList.length ? dueList : wordData.filter(w => isDue(w) && w.id !== excludeId);
-    const weakList2 = weakList.length ? weakList : wordData.filter(w => isWeak(w) && w.id !== excludeId);
-    const newList2 = newList.length ? newList : wordData.filter(w => isNew(w) && w.id !== excludeId);
-    const anyList2 = anyList.length ? anyList : wordData.filter(w => w.id !== excludeId);
+    // もし全候補が消えた時だけ，直近回避を緩める
+    const fallbackAny = wordData.filter(w => w.id !== excludeId);
 
-    // 重み  due優先 ただし弱い or 新規も混ぜる
-    // dueが1語しかない時に固定化しないように 30%で混ぜる
+    // 重み付き選択
     const r = Math.random();
+    let pool = null;
 
-    let pickFrom = null;
-    if (dueList2.length && r < 0.55) pickFrom = dueList2;
-    else if (weakList2.length && r < 0.80) pickFrom = weakList2;
-    else if (newList2.length && r < 0.95) pickFrom = newList2;
-    else pickFrom = anyList2;
+    if (dueList.length && r < 0.55) pool = dueList;
+    else if (weakList.length && r < 0.80) pool = weakList;
+    else if (newList.length && r < 0.95) pool = newList;
+    else if (anyList.length) pool = anyList;
+    else pool = fallbackAny;
 
-    const chosen = pickFrom[Math.floor(Math.random() * pickFrom.length)] || null;
+    const chosen = pool[Math.floor(Math.random() * pool.length)] || null;
     if (chosen) SRS.pushRecent(chosen.id);
     return chosen;
   }
