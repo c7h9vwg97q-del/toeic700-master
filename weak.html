@@ -7,248 +7,189 @@
   <title>Weak Mode - TOEIC 700 Master</title>
   <style>
     #version-tag { font-size: 10px; color: var(--subtext); position: absolute; top: 10px; right: 10px; opacity: 0.7; }
-    #card { min-height: 250px; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; }
-    #answer-section { margin-top: 20px; padding-top: 20px; border-top: 1px dashed #444; width: 100%; }
+
+    #card { min-height: 250px; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; -webkit-tap-highlight-color: transparent; user-select: none; }
+    #answer-section { margin-top: 20px; padding-top: 20px; border-top: 1px dashed #444; width: 100%; text-align: center; }
+
     #meaning { font-size: 1.5rem; color: var(--accent); font-weight: bold; margin-bottom: 10px; }
-    #example { font-style: italic; color: var(--subtext); font-size: 0.9rem; }
+    #example { font-style: italic; color: var(--subtext); font-size: 0.9rem; line-height: 1.4; padding: 0 10px; }
+
     .btn-group { display: grid; gap: 10px; width: 100%; }
     .sub-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    button:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    button:disabled { opacity: 0.25; cursor: not-allowed; filter: grayscale(1); pointer-events: none; }
+
     .status-msg { text-align: center; margin-top: 50px; }
+
+    /* 安全策: hidden が ui.css に無くても動くようにする */
+    .hidden { display: none !important; }
   </style>
 </head>
 <body>
 
-<div id="version-tag">WEAK MODE v3</div>
+  <div id="version-tag">WEAK MODE v3</div>
 
-<div class="container">
-  <button class="btn-outline" style="margin-bottom: 20px; width: auto;" onclick="location.href='index.html'">← 戻る</button>
+  <div class="container">
+    <button class="btn-outline" style="margin-bottom: 20px; width: auto;" onclick="location.href='index.html'">← 戻る</button>
 
-  <div id="learning-ui">
-    <div class="card" id="card">
-      <div id="word" class="text-large"></div>
+    <div id="learning-ui">
+      <div class="card" id="card">
+        <div id="word" class="text-large">読み込み中...</div>
 
-      <div id="answer-section" class="hidden">
-        <div id="meaning"></div>
-        <div id="example"></div>
+        <!-- ここが最重要: 初期で必ず hidden を付けておく -->
+        <div id="answer-section" class="hidden">
+          <div id="meaning"></div>
+          <div id="example"></div>
+        </div>
+
+        <div id="tap-hint" style="margin-top: 20px; font-size: 12px; color: #666;">
+          タップで答えを表示
+        </div>
       </div>
 
-      <div id="tap-hint" style="margin-top: 20px; font-size: 12px; color: #666;">
-        タップで答えを表示
+      <div class="mt-20 btn-group">
+        <button id="btn-known" class="btn-primary" disabled>覚えた</button>
+        <div class="sub-group">
+          <button id="btn-unsure" class="btn-outline" disabled>怪しい</button>
+          <button id="btn-forgot" class="btn-outline" style="color: var(--danger); border-color: var(--danger);" disabled>忘れた</button>
+        </div>
       </div>
+
+      <p id="remaining-count" style="text-align:center; font-size:12px; color:var(--subtext); margin-top:15px;"></p>
     </div>
 
-    <div class="mt-20 btn-group">
-      <button id="btn-known" class="btn-primary" disabled>覚えた</button>
-      <div class="sub-group">
-        <button id="btn-unsure" class="btn-outline" disabled>怪しい</button>
-        <button id="btn-forgot" class="btn-outline" style="color: var(--danger); border-color: var(--danger);" disabled>忘れた</button>
-      </div>
+    <div id="empty-ui" class="hidden status-msg">
+      <div class="text-large">🎉 Clear!</div>
+      <p>現在,弱点単語はありません.</p>
+      <button class="btn-primary mt-20" onclick="location.href='index.html'">ホームへ戻る</button>
     </div>
-
-    <p id="remaining-count" style="text-align:center; font-size:12px; color:var(--subtext); margin-top:15px;"></p>
   </div>
 
-  <div id="empty-ui" class="hidden status-msg">
-    <div class="text-large">🎉 Clear!</div>
-    <p>現在,弱点単語はありません.</p>
-    <button class="btn-primary mt-20" onclick="location.href='index.html'">ホームへ戻る</button>
-  </div>
-</div>
+  <script src="data.js"></script>
+  <script src="srs.js"></script>
 
-<script src="data.js"></script>
-<script src="srs.js"></script>
+  <script>
+    (() => {
+      'use strict';
 
-<script>
-let weakQueue = [];
-let current = null;
-let isRevealed = false;
+      let weakQueue = [];
+      let current = null;
+      let isRevealed = false;
+      let isProcessing = false;
 
-// 直近に出した単語を避ける(weakモード専用)
-const RECENT_KEY = "toeic_weak_recent";
-function getRecent() {
-  try { return JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"); } catch { return []; }
-}
-function pushRecent(id) {
-  const MAX = 20;
-  const arr = getRecent().filter(x => x !== id);
-  arr.unshift(id);
-  if (arr.length > MAX) arr.length = MAX;
-  localStorage.setItem(RECENT_KEY, JSON.stringify(arr));
-}
+      const dom = {
+        card: document.getElementById('card'),
+        word: document.getElementById('word'),
+        answer: document.getElementById('answer-section'),
+        meaning: document.getElementById('meaning'),
+        example: document.getElementById('example'),
+        hint: document.getElementById('tap-hint'),
+        remaining: document.getElementById('remaining-count'),
+        learningUI: document.getElementById('learning-ui'),
+        emptyUI: document.getElementById('empty-ui'),
+        btnKnown: document.getElementById('btn-known'),
+        btnUnsure: document.getElementById('btn-unsure'),
+        btnForgot: document.getElementById('btn-forgot'),
+        btns: []
+      };
+      dom.btns = [dom.btnKnown, dom.btnUnsure, dom.btnForgot];
 
-const dom = {
-  card: document.getElementById('card'),
-  word: document.getElementById('word'),
-  answer: document.getElementById('answer-section'),
-  meaning: document.getElementById('meaning'),
-  example: document.getElementById('example'),
-  hint: document.getElementById('tap-hint'),
-  remaining: document.getElementById('remaining-count'),
-  learningUI: document.getElementById('learning-ui'),
-  emptyUI: document.getElementById('empty-ui'),
-  btnKnown: document.getElementById('btn-known'),
-  btnUnsure: document.getElementById('btn-unsure'),
-  btnForgot: document.getElementById('btn-forgot'),
-};
+      function setButtons(on) {
+        dom.btns.forEach(b => b.disabled = !on);
+      }
 
-function setButtons(on) {
-  dom.btnKnown.disabled = !on;
-  dom.btnUnsure.disabled = !on;
-  dom.btnForgot.disabled = !on;
-}
+      function buildWeakQueue() {
+        const stats = SRS.getStats();
+        weakQueue = wordData.filter(w => {
+          const s = stats[w.id];
+          if (!s) return false;
+          const total = (s.correct || 0) + (s.wrong || 0);
+          if (total === 0) return false;
+          const acc = (s.correct || 0) / total;
+          return acc < 0.7;
+        });
 
-// 弱点スコア: 高いほど優先
-// - 正答率が低いほど
-// - wrong が多いほど
-// - 直近で間違えたほど
-function weakScore(s) {
-  const total = (s.correct || 0) + (s.wrong || 0);
-  if (total <= 0) return -1;
+        // 並びを毎回シャッフル
+        for (let i = weakQueue.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          const tmp = weakQueue[i];
+          weakQueue[i] = weakQueue[j];
+          weakQueue[j] = tmp;
+        }
+      }
 
-  const acc = (s.correct || 0) / total;          // 0..1
-  const wrong = (s.wrong || 0);                  // 0..
-  const now = Date.now();
-  const lastAt = (s.lastAt || 0);
-  const days = Math.max(0, (now - lastAt) / (24*60*60*1000));
-  const recency = 1 / (1 + days);                // 最近ほど 1 に近い
+      function resetAnswerHidden() {
+        // ここが答え先出し対策の本体
+        dom.answer.classList.add('hidden');
+        dom.hint.classList.remove('hidden');
+        setButtons(false);
+        isRevealed = false;
+      }
 
-  // 重み: acc低 + wrong多 + 最近復習ほど優先
-  return (1 - acc) * 2.0 + Math.log1p(wrong) * 1.2 + recency * 0.8;
-}
+      function loadNext() {
+        isProcessing = false;
 
-function shuffleInPlace(a) {
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-}
+        if (weakQueue.length === 0) {
+          dom.learningUI.classList.add('hidden');
+          dom.emptyUI.classList.remove('hidden');
+          return;
+        }
 
-// 弱点キューを作る
-function buildWeakQueue() {
-  const stats = SRS.getStats();
-  const recent = new Set(getRecent());
+        current = weakQueue.shift();
 
-  // まず弱点候補を全件集める
-  let candidates = wordData
-    .map(w => {
-      const s = stats[w.id];
-      if (!s) return null;
-      const total = (s.correct || 0) + (s.wrong || 0);
-      if (total <= 0) return null;
+        // 表示は先に word のみ出す
+        dom.word.innerText = current.word;
 
-      // 弱点判定は緩める: acc<0.8 か wrong>=2 か 直近に間違えた
-      const acc = (s.correct || 0) / total;
-      const recentlyWrong = (s.wrong || 0) > 0 && (Date.now() - (s.lastAt || 0) < 7 * 24*60*60*1000);
-      const isWeak = (acc < 0.8) || ((s.wrong || 0) >= 2) || recentlyWrong;
-      if (!isWeak) return null;
+        // 答えは hidden のまま中身だけ更新
+        dom.meaning.innerText = current.meaning;
+        dom.example.innerText = current.example;
 
-      return { w, score: weakScore(s), avoid: recent.has(w.id) };
-    })
-    .filter(Boolean);
+        resetAnswerHidden();
 
-  if (candidates.length === 0) {
-    weakQueue = [];
-    return;
-  }
+        dom.remaining.innerText = "残り " + weakQueue.length + " 単語";
+      }
 
-  // 直近出したやつをなるべく後回し
-  const fresh = candidates.filter(x => !x.avoid);
-  const avoided = candidates.filter(x => x.avoid);
+      function reveal() {
+        if (!current || isRevealed) return;
+        isRevealed = true;
+        dom.answer.classList.remove('hidden');
+        dom.hint.classList.add('hidden');
+        setButtons(true);
+      }
 
-  // スコア順に上位を取りつつ,少しランダム性を入れる
-  fresh.sort((a,b) => b.score - a.score);
-  avoided.sort((a,b) => b.score - a.score);
+      function handleAnswer(isCorrect) {
+        if (isProcessing || !current || !isRevealed) return;
+        isProcessing = true;
 
-  // 上位を中心にキュー化
-  const takeFresh = fresh.slice(0, 40);
-  const takeAvoid = avoided.slice(0, 15);
+        SRS.recordResult(current.id, isCorrect);
 
-  // 同点や固定化を避けるため軽くシャッフル
-  shuffleInPlace(takeFresh);
-  shuffleInPlace(takeAvoid);
+        // その場で弱点判定を更新して次へ
+        buildWeakQueue();
+        loadNext();
+      }
 
-  // ただし先頭は強い弱点を優先したいので,先頭だけ再ソート
-  takeFresh.sort((a,b) => b.score - a.score);
+      // カードタップで表示
+      dom.card.addEventListener('click', (e) => { e.preventDefault(); reveal(); });
 
-  weakQueue = takeFresh.concat(takeAvoid).map(x => x.w);
+      // ボタン
+      dom.btnKnown.addEventListener('click', () => handleAnswer(true));
+      dom.btnUnsure.addEventListener('click', () => handleAnswer(false));
+      dom.btnForgot.addEventListener('click', () => handleAnswer(false));
 
-  // ここで最低でも数個は確保
-  if (weakQueue.length === 0) weakQueue = candidates.map(x => x.w);
-}
+      // iOS対策
+      document.addEventListener('touchstart', () => {}, { passive: true });
 
-function showEmpty() {
-  dom.learningUI.classList.add('hidden');
-  dom.emptyUI.classList.remove('hidden');
-}
-
-function loadNext() {
-  if (!weakQueue.length) {
-    showEmpty();
-    return;
-  }
-
-  // 直前と同じが出たら避ける(可能なら)
-  let next = weakQueue.shift();
-  if (current && next && next.id === current.id) {
-    const altIndex = weakQueue.findIndex(x => x.id !== current.id);
-    if (altIndex >= 0) {
-      const alt = weakQueue.splice(altIndex, 1)[0];
-      weakQueue.unshift(next);
-      next = alt;
-    }
-  }
-
-  current = next;
-  isRevealed = false;
-
-  dom.word.innerText = current.word;
-  dom.meaning.innerText = current.meaning;
-  dom.example.innerText = current.example;
-
-  dom.answer.classList.add('hidden');
-  dom.hint.classList.remove('hidden');
-  setButtons(false);
-
-  dom.remaining.innerText = "残り " + weakQueue.length + " 単語";
-  pushRecent(current.id);
-}
-
-function reveal() {
-  if (!current || isRevealed) return;
-  isRevealed = true;
-  dom.answer.classList.remove('hidden');
-  dom.hint.classList.add('hidden');
-  setButtons(true);
-}
-
-function handleAnswer(isCorrect) {
-  if (!current || !isRevealed) return;
-
-  // Weakモードは,怪しい/忘れたを強く再登場させたいので
-  // isCorrect=false の時は,同じ単語をキューの後方に戻す(ただし連発はしない)
-  SRS.recordResult(current.id, isCorrect);
-
-  if (!isCorrect) {
-    // キュー後方に戻す(すぐは出ない)
-    weakQueue.push(current);
-  }
-
-  // 状態更新
-  buildWeakQueue();
-  loadNext();
-}
-
-dom.card.addEventListener('click', reveal);
-dom.btnKnown.onclick = () => handleAnswer(true);
-dom.btnUnsure.onclick = () => handleAnswer(false);
-dom.btnForgot.onclick = () => handleAnswer(false);
-
-window.onload = function() {
-  buildWeakQueue();
-  loadNext();
-};
-</script>
+      window.addEventListener('DOMContentLoaded', () => {
+        if (typeof window.wordData === 'undefined' || typeof window.SRS === 'undefined') {
+          dom.word.innerText = "読み込みエラー";
+          dom.hint.classList.add('hidden');
+          return;
+        }
+        buildWeakQueue();
+        loadNext();
+      });
+    })();
+  </script>
 
 </body>
 </html>
