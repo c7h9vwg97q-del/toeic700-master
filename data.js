@@ -1,5 +1,5 @@
 // TOEIC700 word list, 250 words
-const wordData = [
+window.wordData = [
   { id: "a001", word: "accommodate", meaning: "収容する", example: "This conference room can accommodate up to 50 people." },
   { id: "a002", word: "accompany", meaning: "同行する", example: "Ms. Tanaka will accompany the CEO on his trip to London." },
   { id: "a003", word: "accounting", meaning: "経理", example: "He works in the accounting department of a large corporation." },
