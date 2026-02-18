@@ -1,130 +1,138 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="ui.css">
+<title>Weak Mode</title>
+</head>
+<body>
+
+<div class="container">
+
+<button onclick="location.href='index.html'" class="btn-outline">← 戻る</button>
+
+<div id="main">
+  <div class="card" id="card">
+    <div id="word" class="text-large">Loading...</div>
+
+    <div id="answer" class="hidden">
+      <div id="meaning"></div>
+      <div id="example"></div>
+    </div>
+
+    <div id="hint">タップで答えを表示</div>
+  </div>
+
+  <div style="margin-top:20px;">
+    <button id="btn-known" disabled>覚えた</button>
+    <button id="btn-unsure" disabled>怪しい</button>
+    <button id="btn-forgot" disabled>忘れた</button>
+  </div>
+</div>
+
+<div id="empty" class="hidden">
+  🎉 弱点単語なし
+</div>
+
+</div>
+
+<script src="data.js"></script>
+<script src="srs.js"></script>
+
 <script>
-let weakPool = [];
 let current = null;
-let isRevealed = false;
+let revealed = false;
+let weakList = [];
 
-const RECENT_MAX = 12; // 直近回避数
-const RECENT_KEY = "toeic_weak_recent";
-
-const dom = {
-  card: document.getElementById('card'),
-  word: document.getElementById('word'),
-  answer: document.getElementById('answer-section'),
-  meaning: document.getElementById('meaning'),
-  example: document.getElementById('example'),
-  hint: document.getElementById('tap-hint'),
-  remaining: document.getElementById('remaining-count'),
-  learningUI: document.getElementById('learning-ui'),
-  emptyUI: document.getElementById('empty-ui'),
-  btnKnown: document.getElementById('btn-known'),
-  btnUnsure: document.getElementById('btn-unsure'),
-  btnForgot: document.getElementById('btn-forgot')
+const el = {
+  card: document.getElementById("card"),
+  word: document.getElementById("word"),
+  meaning: document.getElementById("meaning"),
+  example: document.getElementById("example"),
+  answer: document.getElementById("answer"),
+  hint: document.getElementById("hint"),
+  btnKnown: document.getElementById("btn-known"),
+  btnUnsure: document.getElementById("btn-unsure"),
+  btnForgot: document.getElementById("btn-forgot"),
+  main: document.getElementById("main"),
+  empty: document.getElementById("empty")
 };
 
-function setButtons(on) {
-  dom.btnKnown.disabled = !on;
-  dom.btnUnsure.disabled = !on;
-  dom.btnForgot.disabled = !on;
+function safeCheck() {
+  if (!window.wordData) return false;
+  if (!window.SRS) return false;
+  return true;
 }
 
-function getRecent() {
-  try { return JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"); }
-  catch { return []; }
-}
-function pushRecent(id) {
-  const arr = getRecent().filter(x => x !== id);
-  arr.unshift(id);
-  if (arr.length > RECENT_MAX) arr.length = RECENT_MAX;
-  localStorage.setItem(RECENT_KEY, JSON.stringify(arr));
-}
-
-function isWeakWord(w, stats) {
-  const s = stats[w.id];
-  if (!s) return false;
-  const total = (s.correct || 0) + (s.wrong || 0);
-  if (total <= 0) return false;
-  const acc = (s.correct || 0) / total;
-  return acc < 0.7;
-}
-
-function rebuildWeakPool() {
+function buildWeak() {
   const stats = SRS.getStats();
-  weakPool = wordData.filter(w => isWeakWord(w, stats));
+  weakList = wordData.filter(w => {
+    const s = stats[w.id];
+    if (!s) return false;
+    const total = (s.correct || 0) + (s.wrong || 0);
+    if (total === 0) return false;
+    return (s.correct / total) < 0.7;
+  });
 }
 
-function pickNextWeak() {
-  const recent = new Set(getRecent());
-  if (current) recent.add(current.id); // 直前の完全回避
-
-  // まずは直近回避ありで候補を作る
-  let candidates = weakPool.filter(w => !recent.has(w.id));
-
-  // 候補が空なら直近回避を緩める
-  if (candidates.length === 0) {
-    candidates = weakPool.filter(w => !current || w.id !== current.id);
-  }
-
-  if (candidates.length === 0) return null;
-
-  return candidates[Math.floor(Math.random() * candidates.length)];
-}
-
-function renderWord(w) {
-  current = w;
-  isRevealed = false;
-
-  dom.word.innerText = w.word;
-  dom.meaning.innerText = w.meaning;
-  dom.example.innerText = w.example;
-
-  dom.answer.classList.add('hidden');
-  dom.hint.classList.remove('hidden');
-  setButtons(false);
-
-  dom.remaining.innerText = "残り " + weakPool.length + " 単語";
-}
-
-function loadNext() {
-  rebuildWeakPool();
-
-  if (weakPool.length === 0) {
-    dom.learningUI.classList.add('hidden');
-    dom.emptyUI.classList.remove('hidden');
+function nextWord() {
+  if (weakList.length === 0) {
+    el.main.classList.add("hidden");
+    el.empty.classList.remove("hidden");
     return;
   }
 
-  const next = pickNextWeak();
-  if (!next) {
-    dom.learningUI.classList.add('hidden');
-    dom.emptyUI.classList.remove('hidden');
-    return;
-  }
+  const index = Math.floor(Math.random() * weakList.length);
+  current = weakList[index];
+  revealed = false;
 
-  pushRecent(next.id);
-  renderWord(next);
+  el.word.innerText = current.word;
+  el.meaning.innerText = current.meaning;
+  el.example.innerText = current.example;
+
+  el.answer.classList.add("hidden");
+  el.hint.classList.remove("hidden");
+
+  el.btnKnown.disabled = true;
+  el.btnUnsure.disabled = true;
+  el.btnForgot.disabled = true;
 }
 
 function reveal() {
-  if (!current || isRevealed) return;
-  isRevealed = true;
-  dom.answer.classList.remove('hidden');
-  dom.hint.classList.add('hidden');
-  setButtons(true);
+  if (!current || revealed) return;
+  revealed = true;
+
+  el.answer.classList.remove("hidden");
+  el.hint.classList.add("hidden");
+
+  el.btnKnown.disabled = false;
+  el.btnUnsure.disabled = false;
+  el.btnForgot.disabled = false;
 }
 
-function handleAnswer(isCorrect) {
-  if (!current || !isRevealed) return;
+function answer(isCorrect) {
+  if (!current || !revealed) return;
+
   SRS.recordResult(current.id, isCorrect);
-  loadNext();
+  buildWeak();
+  nextWord();
 }
 
-dom.card.addEventListener('click', reveal);
+el.card.onclick = reveal;
+el.btnKnown.onclick = () => answer(true);
+el.btnUnsure.onclick = () => answer(false);
+el.btnForgot.onclick = () => answer(false);
 
-dom.btnKnown.onclick = () => handleAnswer(true);
-dom.btnUnsure.onclick = () => handleAnswer(false);
-dom.btnForgot.onclick = () => handleAnswer(false);
-
-window.onload = () => {
-  loadNext();
+window.onload = function() {
+  if (!safeCheck()) {
+    document.body.innerHTML = "data.js または srs.js が読み込めていません";
+    return;
+  }
+  buildWeak();
+  nextWord();
 };
 </script>
+
+</body>
+</html>
