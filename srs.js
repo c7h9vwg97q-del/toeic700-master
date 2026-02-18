@@ -1,4 +1,4 @@
-window.SRS = {
+const SRS = window.SRS = {
   getStats: () => JSON.parse(localStorage.getItem('toeic_srs_stats') || '{}'),
   setStats: (stats) => localStorage.setItem('toeic_srs_stats', JSON.stringify(stats)),
   getUser: () => JSON.parse(localStorage.getItem('toeic_user') || '{"xp":0,"streak":0,"lastDate":null,"combo":0}'),
